@@ -1,7 +1,7 @@
 import rclpy
 from rclpy.node import Node
 from nav_msgs.msg import Odometry
-from geometry_msgs.msg import Twist
+from geometry_msgs.msg import Twist, Pose, Quaternion
 
 import serial, time, pygame, sys, threading, math
 import numpy as np
@@ -13,8 +13,19 @@ class OdomPublisher(Node):
         self.wheel = Controller('/dev/ttyUSB0')
         self.L = 0.7
         self.current_cmd = Twist()
-        self.calOdom = [0,0]
+        self.cmdCalOdom = [0,0]
         self.cmdL = self.cmdR = 0
+        self.currentOdom = [0,0]
+        
+        self.prev_t = time.time()
+        self.prev_pose = Pose()
+        self.prev_pose.position.x = 0.0
+        self.prev_pose.position.y = 0.0
+        self.prev_pose.position.z = 0.0
+        self.prev_pose.orientation.x = 0.0
+        self.prev_pose.orientation.y = 0.0
+        self.prev_pose.orientation.z = 0.0
+        self.prev_pose.orientation.w = 1.0
 
         self.subscription = self.create_subscription(Twist, '/cmd_vel', self.control_callback, 10)
         self.subscription  # prevent unused variable warning
@@ -56,28 +67,77 @@ class OdomPublisher(Node):
         self.cmdL = int(self.linear_velocity_to_RPM(vL, self.wheel.radius*2))
         self.cmdR = int(self.linear_velocity_to_RPM(vR, self.wheel.radius*2))
         
-        self.calOdom = self.RPM_to_velocity(self.cmdL, self.cmdR, self.L, self.wheel.radius*2)
-        print([x, w], " : ", [self.wheel.left_meterps, self.wheel.right_meterps], " : ", self.calOdom)
+        self.cmdCalOdom = self.RPM_to_velocity(self.cmdL, self.cmdR, self.L, self.wheel.radius*2)
+        self.currentOdom = self.RPM_to_velocity(self.wheel.left_rpm, self.wheel.right_rpm, self.L, self.wheel.radius*2)
+        print(self.currentOdom, " : ", [self.wheel.left_rpm, self.wheel.right_rpm], " : ", self.cmdCalOdom)
 
     def publish_odom(self):
         msg = Odometry()
         msg.header.stamp = self.get_clock().now().to_msg()
         msg.header.frame_id = 'odom'
         msg.child_frame_id = 'base_link'
-        msg.pose.pose.position.x = 0.0
-        msg.pose.pose.position.y = 0.0
-        msg.pose.pose.position.z = 0.0
-        msg.pose.pose.orientation.x = 0.0
-        msg.pose.pose.orientation.y = 0.0
-        msg.pose.pose.orientation.z = 0.0
-        msg.pose.pose.orientation.w = 1.0
-        msg.twist.twist.linear.x = float(self.calOdom[0])
+        msg.twist.twist.linear.x = float(self.currentOdom[0])
         msg.twist.twist.linear.y = 0.0
         msg.twist.twist.linear.z = 0.0
         msg.twist.twist.angular.x = 0.0
         msg.twist.twist.angular.y = 0.0
-        msg.twist.twist.angular.z = float(self.calOdom[1])
+        msg.twist.twist.angular.z = float(self.currentOdom[1])
+        
+        x = self.prev_pose.position.x
+        y = self.prev_pose.position.y
+        yaw = self.get_yaw_from_quaternion(self.prev_pose.orientation)
+        vx = msg.twist.twist.linear.x
+        #vy = msg.twist.twist.linear.y
+        v_yaw = msg.twist.twist.angular.z
+
+        dt = time.time()-self.prev_t
+        self.prev_t = time.time()
+        #print("dt : ", dt)
+
+        new_x = x + (vx * math.cos(yaw)) * dt
+        new_y = y + (vx * math.sin(yaw)) * dt
+        new_yaw = yaw + v_yaw * dt
+
+        msg.pose.pose.position.x = new_x
+        msg.pose.pose.position.y = new_y
+        msg.pose.pose.position.z = 0.0        
+        msg.pose.pose.orientation = self.yaw_to_quaternion(new_yaw)
+        self.prev_pose = msg.pose.pose
         self.odom_pub.publish(msg)
+
+    def yaw_to_quaternion(self, yaw):
+        quaternion = Quaternion()
+        quaternion.x = 0.0
+        quaternion.y = 0.0
+        quaternion.z = math.sin(yaw / 2.0)
+        quaternion.w = math.cos(yaw / 2.0)
+        return quaternion
+
+    def get_position_and_orientation(self, pose, dt):
+        x = pose.pose.position.x
+        y = pose.pose.position.y
+        yaw = get_yaw_from_quaternion(pose.pose.orientation)
+        vx = twist.twist.linear.x
+        vy = odom_msg.twist.twist.linear.y
+        v_yaw = odom_msg.twist.twist.angular.z
+        
+        dt = 0.1  # Time interval in seconds
+        new_x = x + (vx * math.cos(yaw) - vy * math.sin(yaw)) * dt
+        new_y = y + (vx * math.sin(yaw) + vy * math.cos(yaw)) * dt
+        new_yaw = yaw + v_yaw * dt
+        
+        return (new_x, new_y, new_yaw)
+    
+    def get_yaw_from_quaternion(self, quaternion):
+        #print(type(quaternion))
+        x = quaternion.x
+        y = quaternion.y
+        z = quaternion.z
+        w = quaternion.w
+        t3 = 2.0 * (w * z + x * y)
+        t4 = 1.0 - 2.0 * (y * y + z * z)
+        yaw = math.atan2(t3, t4)
+        return yaw
 
 class Controller():
     def __init__(self, port='/dev/ttyUSB0'):
@@ -106,8 +166,8 @@ class Controller():
                         stopbits=serial.STOPBITS_ONE
                         )
         
-        #self.setMode('Torque')
-        self.setMode('Velocity')
+        self.setMode('Torque')
+        #self.setMode('Velocity')
         self.setMotorEnable(True)
         
         self.tRead = threading.Thread(target=self.readThread)

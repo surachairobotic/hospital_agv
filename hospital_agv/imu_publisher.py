@@ -25,27 +25,28 @@ class IMUPublisher():
         self.mag = MagneticField()
         self.mag.header.frame_id = 'imu'
         
-        self.publisher_imu = self.node.create_publisher(Imu, '/agv/imu', 10)
-        self.publisher_mag = self.node.create_publisher(MagneticField, '/agv/mag', 10)
+        self.publisher_imu = self.node.create_publisher(Imu, '/imu/imu', 10)
+        self.publisher_mag = self.node.create_publisher(MagneticField, '/imu/mag', 10)
         timer_period = 0.01  # seconds
         self.timer = self.node.create_timer(timer_period, self.timer_callback)
         self.i = 0
 
-        self.ser = serial.Serial('/dev/ttyACM0', baudrate=115200)
+        self.ser = serial.Serial('/dev/ttyACM1', baudrate=115200)
         self.recvThread = threading.Thread(target=self.recvData)
         self.recvThread.start()
 
     def recvData(self):
         while True:
             #try:
-            line = self.ser.readline().decode('utf-8').strip()
-            #print(line)
+            line = self.ser.readline()
+            #line = self.ser.readline()
+            line = line.decode()
             line = list(filter(None, line.split('|')))
             #print(line)
-            if len(line) != 4:
+            if len(line) != 5:
                 continue
             
-            for x in line:
+            for x in line[:-1]:
                 mode = x[0]
                 if x[1] == 'r':
                     break
@@ -127,16 +128,18 @@ class MultiPublisher(Node):
     
     def init(self):
         self.imu_publisher = IMUPublisher(self)
-        self.odom_publisher = OdomPublisher(self)
+        #self.odom_publisher = OdomPublisher(self)
 
 
 def main(args=None):
     rclpy.init(args=args)
+    
+    nh = Node("imu_publisher")
 
-    publisher = MultiPublisher()
-    publisher.init()
+    publisher = IMUPublisher(nh)
+    #publisher.init()
 
-    rclpy.spin(publisher)
+    rclpy.spin(publisher.node)
 
     # Destroy the node explicitly
     # (optional - otherwise it will be done automatically
