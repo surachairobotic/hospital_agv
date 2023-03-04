@@ -166,8 +166,8 @@ class Controller():
                         stopbits=serial.STOPBITS_ONE
                         )
         
-        self.setMode('Torque')
-        #self.setMode('Velocity')
+        #self.setMode('Torque')
+        self.setMode('Velocity')
         self.setMotorEnable(True)
         
         self.tRead = threading.Thread(target=self.readThread)

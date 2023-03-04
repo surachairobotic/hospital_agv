@@ -31,7 +31,7 @@ class IMUPublisher():
         self.timer = self.node.create_timer(timer_period, self.timer_callback)
         self.i = 0
 
-        self.ser = serial.Serial('/dev/ttyACM1', baudrate=115200)
+        self.ser = serial.Serial('/dev/ttyACM0', baudrate=115200)
         self.recvThread = threading.Thread(target=self.recvData)
         self.recvThread.start()
 
@@ -52,7 +52,7 @@ class IMUPublisher():
                     break
                 d = x[1:].split(',')
                 d = [float(k) for k in d]
-                #print(d)
+                print(d)
                 if mode == 'O':
                     quat = self.euler_to_quaternion(d)
                     self.imu.orientation.x = quat[0]
