@@ -21,7 +21,10 @@ setup(
     entry_points={
         'console_scripts': [
             'imu_publisher = hospital_agv.imu_publisher:main',
-            'odom_publisher = hospital_agv.odom_publisher:main'
+            'odom_publisher = hospital_agv.odom_publisher:main',
+            'robot_state_publisher = hospital_agv.robot_state_publisher:main',
+            'server = hospital_agv.server:main',
+            'send_goal = hospital_agv.send_goal:main'
         ],
     },
 )
