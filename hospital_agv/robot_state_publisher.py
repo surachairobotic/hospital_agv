@@ -2,7 +2,7 @@ import rclpy
 from rclpy.node import Node
 import tf2_ros
 from geometry_msgs.msg import TransformStamped, Pose, Point, Quaternion, PoseStamped
-import requests, math
+import requests, math, json
 
 def send_data(data):
     url = 'http://0.0.0.0:8000/set_robotstate'
@@ -13,6 +13,22 @@ def send_data(data):
         print('Data sent successfully.')
     else:
         print('Failed to send data.')
+def get_goal():
+    url = 'http://0.0.0.0:8000/goal'
+    headers = {'Content-Type': 'application/json'}
+    response = requests.get(url, headers=headers)
+    print(response)
+    if response.status_code == 200:
+        #print('Goal successfully.')
+        #print(type(response._content.decode()))
+        #print(response._content.decode())
+        #for x in response._content.decode():
+        #    print(x)
+        json_obj = json.loads(response._content.decode())
+        print(json_obj["data"])
+        return json_obj["data"]
+    else:
+        print('Failed to get goal.')
 
 
 def pose2xyyaw(position, orientation):
@@ -50,8 +66,15 @@ class TransformExample(Node):
         self.tf_buffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
         self.timer = self.create_timer(0.5, self.timer_callback)
+        self.timer_goal = self.create_timer(0.5, self.goal_callback)
 
         self.cnt = 0
+
+    def goal_callback(self):
+    	pose_goal = get_goal()
+    	if pose_goal != None:
+    	    pose = xyyaw2pose(pose_goal[0], pose_goal[1], pose_goal[2])
+    	    self.goal.send_goal(pose)
 
     def timer_callback(self):
         try:
@@ -66,7 +89,7 @@ class TransformExample(Node):
             p = "{:.2f}, {:.2f}, {:.2f}".format(position.x, position.y, position.z)
             o = "{:.2f}, {:.2f}, {:.2f}, {:.2f}".format(orientation.x, orientation.y, orientation.z, orientation.w)
             res = pose2xyyaw(position, orientation)
-            #print(p, " : ", o, " : ", res)
+            print(p, " : ", o, " : ", res)
             send_data(res)
 
             # self.cnt=self.cnt+1

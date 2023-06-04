@@ -7,7 +7,7 @@ import json, socket
 import uvicorn
 
 current_pose = [0.0,0.0,0.0]
-goal = [-1.0,2.0,90.0]
+goal = [0.0,0.0,0.0]
 
 app = FastAPI()
 
@@ -49,8 +49,7 @@ async def startup_event():
 
 @app.get("/")
 async def index():
-    with open("static/index.html") as file:
-        return HTMLResponse(file.read())
+    return {"data": "OK"}
 
 @app.get("/robot_pose")
 async def robot_pose():
@@ -58,8 +57,10 @@ async def robot_pose():
     return {"data": current_pose}
 
 @app.get("/goal")
-async def goal():
+async def goal_func():
     global goal
+    res = {"data": None}
+    print(goal)
     if goal != None:
         res = {"data": goal}
     goal = None
@@ -85,10 +86,11 @@ async def set_goal(info: Request): # var_name: var_type
 async def set_robotstate(info: Request):
     global current_pose
     req = await info.json()
-    print(req)
+    #print(req)
     if len(req) == 3:
         status = 200
         current_pose = req
+        print(current_pose)
     else:
         raise HTTPException(status_code=400, detail="Invalid input format")
 
